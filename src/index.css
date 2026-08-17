@@ -1,0 +1,285 @@
+@import url('https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap');
+
+/* Mobile-first layout */
+
+:root {
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, "Noto Sans KR", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: #fff;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+body[data-scroll-locked] {
+  padding-right: 0px !important;
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  background-color: transparent;
+  display: flex;
+  justify-content: center;
+}
+
+/* Full-width app — WebView fills the screen automatically in apps-in-toss */
+#root > div {
+  width: 100%;
+  max-width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: #FFF;
+  box-shadow: none;
+  
+  /* Hide scrollbar */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+#root > div::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide TDS portal container when it has no popups to prevent it from taking up inspector space */
+#tds-mobile-portal-container:empty {
+  display: none !important;
+}
+
+button, input, textarea {
+  font-family: inherit;
+}
+
+input:focus, textarea:focus {
+  outline: none;
+}
+
+/* Animations */
+.anim-pop {
+  animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.7); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.anim-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes confetti {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(220px) rotate(720deg); opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slideUpCentered {
+  from { transform: translate(-50%, 100%); }
+  to { transform: translate(-50%, 0); }
+}
+
+/* ---------------------------------
+   Clean Line Styles
+--------------------------------- */
+
+@keyframes checkPopUp {
+  0% { transform: translate(0, 0) scale(0.5) rotate(var(--start-rot, 0deg)); opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translate(var(--end-x, 0px), -40px) scale(1) rotate(var(--end-rot, 45deg)); opacity: 0; }
+}
+
+.check-particle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  z-index: 100;
+  animation: checkPopUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.feedback-btn-container {
+  position: absolute;
+  bottom: 0;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.feedback-tooltip {
+  opacity: 0;
+  visibility: hidden;
+  background-color: rgba(0, 12, 30, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-family: 'Pretendard', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  transition: opacity 0.2s, visibility 0.2s;
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 8px;
+  right: 0;
+}
+
+.feedback-btn-container:hover .feedback-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.neo-shadow {
+  box-shadow: 0px 6px 20px rgba(0, 29, 58, 0.09);
+}
+:root {
+  --neo-border: 1.5px solid #4E5968;
+  --neo-shadow: none;
+  --neo-shadow-hover: none;
+  --neo-bg-color: #ffffff;
+}
+
+.neo-card {
+  background-color: var(--neo-bg-color);
+  border: var(--neo-border);
+  box-shadow: var(--neo-shadow);
+  border-radius: 20px;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.neo-card:active {
+  transform: scale(0.99);
+}
+
+.neo-btn {
+  background-color: var(--neo-bg-color);
+  border: var(--neo-border);
+  box-shadow: var(--neo-shadow);
+  border-radius: 30px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 16px 20px;
+  color: #191f28;
+  font-size: 16px;
+  text-align: center;
+}
+
+.neo-btn:active {
+  background-color: #F3F4F6;
+  transform: scale(0.98);
+}
+
+.handwriting {
+  font-family: 'Nanum Pen Script', cursive;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.neo-input {
+  border: var(--neo-border);
+  box-shadow: var(--neo-shadow);
+  border-radius: 16px;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  background: #ffffff;
+  width: 100%;
+}
+
+.neo-input:focus {
+  outline: none;
+  border-color: #3182f6;
+}
+
+@keyframes cardSwipeOut {
+  0% { transform: translateX(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateX(150vw) rotate(20deg); opacity: 0; }
+}
+
+@keyframes cardMoveForward {
+  0% { transform: translate(0, 0); background-color: #c5e3ff; }
+  100% { transform: translate(-7px, -11px); background-color: #FFF; }
+}
+
+@keyframes cardFadeInBack {
+  0% { transform: translate(-5px, -5px); opacity: 0; }
+  100% { transform: translate(0, 0); opacity: 1; }
+}
+
+.skeleton-shimmer {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 100%; 
+  animation-duration: 1.5s;
+  animation-fill-mode: forwards; 
+  animation-iteration-count: infinite;
+  animation-name: placeholderShimmer;
+  animation-timing-function: linear;
+}
+
+@keyframes placeholderShimmer {
+  0% { background-position: -468px 0; }
+  100% { background-position: 468px 0; }
+}
+
+@keyframes fadeInUp {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translate(-50%, 20px); }
+  10% { opacity: 1; transform: translate(-50%, 0); }
+  90% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -20px); }
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
