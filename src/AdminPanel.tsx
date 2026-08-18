@@ -22,6 +22,36 @@ export default function AdminPanel() {
   const [message, setMessage] = useState('');
   const [category, setCategory] = useState('empathy');
 
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  };
+
+  const uploadImageToImgbb = async (file: File): Promise<string> => {
+    const imgbbKey = import.meta.env.VITE_IMGBB_API_KEY;
+    if (!imgbbKey) throw new Error("VITE_IMGBB_API_KEY 환경변수가 없습니다.");
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error?.message || "이미지 업로드 실패");
+    return data.data.url;
+  };
+
   // Replies states
   const [recentThread, setRecentThread] = useState<Thread | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
@@ -107,13 +137,25 @@ ${topicInstruction}
         throw new Error("Threads API credentials missing in Vercel env");
       }
 
+      let imageUrl = '';
+      if (imageFile) {
+        setMessage('이미지를 업로드 중입니다... (1/2)');
+        imageUrl = await uploadImageToImgbb(imageFile);
+        setMessage('스레드에 발행 중입니다... (2/2)');
+      }
+
       // Step 1: Create media container
-      const createParams = new URLSearchParams({
-        media_type: 'TEXT',
+      const createParams: Record<string, string> = {
+        media_type: imageUrl ? 'IMAGE' : 'TEXT',
         text: draft,
         access_token: accessToken
-      });
-      const createRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?${createParams.toString()}`, {
+      };
+      if (imageUrl) {
+        createParams.image_url = imageUrl;
+      }
+      const createQuery = new URLSearchParams(createParams);
+
+      const createRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?${createQuery.toString()}`, {
         method: 'POST',
       });
       const createData = await createRes.json();
@@ -373,6 +415,35 @@ ${topicInstruction}
           boxSizing: 'border-box', marginBottom: 20, resize: 'vertical'
         }}
       />
+
+      {/* Image Upload UI */}
+      <div style={{ marginBottom: 20, padding: 16, backgroundColor: '#F9FAFB', borderRadius: 8, border: '1px solid #E5E7EB' }}>
+        <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>📷 이미지 첨부 (선택)</p>
+        <input 
+          type="file" 
+          accept="image/*"
+          onChange={handleImageChange}
+          style={{ width: '100%', fontSize: 14 }}
+        />
+        {imagePreview && (
+          <div style={{ marginTop: 12, position: 'relative', display: 'inline-block' }}>
+            <img src={imagePreview} alt="preview" style={{ maxHeight: 200, borderRadius: 8, border: '1px solid #E5E7EB' }} />
+            <button
+              onClick={() => {
+                setImageFile(null);
+                setImagePreview(null);
+              }}
+              style={{
+                position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: '#FFF',
+                border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+      </div>
 
       <button 
         onClick={publishToThreads} 
