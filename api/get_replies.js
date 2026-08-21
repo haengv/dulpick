@@ -18,12 +18,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Threads credentials missing" });
     }
 
-    // 1. Fetch user's recent threads (up to 25)
-    const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?fields=id,text,timestamp,permalink&limit=25&access_token=${accessToken}`);
+    // 1. Fetch top 10 recent threads (fast & lightweight)
+    const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?fields=id,text,timestamp,permalink&limit=10&access_token=${accessToken}`);
     const threadsData = await threadsRes.json();
 
     if (!threadsRes.ok) {
-      return res.status(threadsRes.status).json({ error: threadsData.error || "Failed to fetch threads" });
+      return res.status(threadsRes.status).json({ error: threadsData.error?.message || "Failed to fetch threads" });
     }
 
     if (!threadsData.data || threadsData.data.length === 0) {
@@ -33,14 +33,11 @@ export default async function handler(req, res) {
     const threads = threadsData.data;
     const replyMap = new Map();
 
-    // Helper to fetch all pages of replies for a thread
-    const fetchRepliesForThread = async (thread) => {
-      let nextUrl = `https://graph.threads.net/v1.0/${thread.id}/replies?fields=id,text,username,timestamp&limit=100&access_token=${accessToken}`;
-      let depth = 0;
-
-      while (nextUrl && depth < 5) { // fetch up to 5 pages per thread (up to 500 replies per thread)
+    // 2. Concurrently fetch replies for each thread (limit 50 per thread, single fast request)
+    await Promise.all(
+      threads.map(async (thread) => {
         try {
-          const repliesRes = await fetch(nextUrl);
+          const repliesRes = await fetch(`https://graph.threads.net/v1.0/${thread.id}/replies?fields=id,text,username,timestamp&limit=50&access_token=${accessToken}`);
           const repliesData = await repliesRes.json();
           if (repliesRes.ok && repliesData.data) {
             repliesData.data.forEach(reply => {
@@ -53,19 +50,12 @@ export default async function handler(req, res) {
                 });
               }
             });
-            nextUrl = repliesData.paging && repliesData.paging.next ? repliesData.paging.next : null;
-          } else {
-            nextUrl = null;
           }
         } catch (e) {
-          nextUrl = null;
+          // ignore single thread fetch error
         }
-        depth++;
-      }
-    };
-
-    // 2. Fetch replies for each recent thread concurrently
-    await Promise.all(threads.map(thread => fetchRepliesForThread(thread)));
+      })
+    );
 
     const allReplies = Array.from(replyMap.values());
 
