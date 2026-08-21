@@ -202,71 +202,22 @@ ${topicInstruction}
       const accessToken = import.meta.env.VITE_THREADS_ACCESS_TOKEN;
       if (!userId || !accessToken) throw new Error("Threads API credentials missing");
 
-      // Try serverless endpoint first (bypasses browser CORS & adblockers)
-      let proxyData: any = null;
-      try {
-        const apiRes = await fetch(`/api/get_replies?userId=${userId}&accessToken=${accessToken}`);
-        if (apiRes.ok) {
-          proxyData = await apiRes.json();
-        }
-      } catch (e) {
-        console.warn("API proxy fetch failed, falling back to direct fetch", e);
+      const apiRes = await fetch(`/api/get_replies?userId=${encodeURIComponent(userId)}&accessToken=${encodeURIComponent(accessToken)}`);
+      const data = await apiRes.json();
+
+      if (!apiRes.ok || !data.success) {
+        const errDetail = typeof data.error === 'object' ? JSON.stringify(data.error) : (data.error || `HTTP ${apiRes.status}`);
+        throw new Error(errDetail);
       }
 
-      if (proxyData && proxyData.success) {
-        setReplies(proxyData.replies || []);
-        if (!proxyData.replies || proxyData.replies.length === 0) {
-          setReplyMessage('최근 게시글에 작성된 댓글이 없습니다.');
-        } else {
-          setReplyMessage(`총 ${proxyData.replies.length}개의 댓글을 최신순으로 불러왔습니다 ✨`);
-        }
-        return;
-      }
-
-      // Direct Client Fallback (fetches top 5 threads and merges replies)
-      const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?fields=id,text,timestamp,permalink&limit=5&access_token=${accessToken}`);
-      const threadsData = await threadsRes.json();
-      if (!threadsRes.ok) throw new Error(JSON.stringify(threadsData.error));
-
-      if (!threadsData.data || threadsData.data.length === 0) {
-        setReplyMessage('작성된 스레드 포스팅이 없습니다.');
-        return;
-      }
-      
-      const allReplies: Reply[] = [];
-      await Promise.all(
-        threadsData.data.map(async (thread: any) => {
-          try {
-            const repliesRes = await fetch(`https://graph.threads.net/v1.0/${thread.id}/replies?fields=id,text,username,timestamp&access_token=${accessToken}`);
-            const repliesData = await repliesRes.json();
-            if (repliesRes.ok && repliesData.data) {
-              repliesData.data.forEach((reply: any) => {
-                allReplies.push({
-                  ...reply,
-                  threadId: thread.id,
-                  threadText: thread.text,
-                  threadPermalink: thread.permalink
-                });
-              });
-            }
-          } catch (e) {}
-        })
-      );
-
-      allReplies.sort((a, b) => {
-        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return timeB - timeA;
-      });
-
-      setReplies(allReplies);
-      if (allReplies.length === 0) {
+      setReplies(data.replies || []);
+      if (!data.replies || data.replies.length === 0) {
         setReplyMessage('최근 게시글에 작성된 댓글이 없습니다.');
       } else {
-        setReplyMessage(`총 ${allReplies.length}개의 댓글을 최신순으로 불러왔습니다 ✨`);
+        setReplyMessage(`총 ${data.replies.length}개의 댓글을 최신순으로 불러왔습니다 ✨`);
       }
     } catch (err: any) {
-      setReplyMessage(`댓글 불러오기 에러: ${err.message}`);
+      setReplyMessage(`댓글 불러오기 에러: ${err.message || '알 수 없는 오류'}`);
     } finally {
       setIsFetchingReplies(false);
     }
