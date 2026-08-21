@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 interface Reply {
   id: string;
   text: string;
-  timestamp: string;
+  timestamp?: string;
+  username?: string;
 }
 
 interface Thread {
@@ -208,7 +209,7 @@ ${topicInstruction}
       setRecentThread(latestThread);
 
       // 2. Fetch replies for the latest thread
-      const repliesRes = await fetch(`https://graph.threads.net/v1.0/${latestThread.id}/replies?access_token=${accessToken}`);
+      const repliesRes = await fetch(`https://graph.threads.net/v1.0/${latestThread.id}/replies?fields=id,text,username,timestamp&access_token=${accessToken}`);
       const repliesData = await repliesRes.json();
       if (!repliesRes.ok) throw new Error(JSON.stringify(repliesData.error));
 
@@ -232,13 +233,18 @@ ${topicInstruction}
       if (!apiKey) throw new Error("Gemini API Key missing");
 
       const prompt = `
-당신은 '두잇(DO IT)' 이라는 생산성/할 일 관리 서비스를 만든 1인 메이커입니다.
+당신은 '둘픽(Dulpick)'이라는 커플 데이트 코스 앱 서비스를 직접 만든 1년 차 계획형(ISFJ) 커플 1인 메이커입니다.
 당신이 스레드에 올린 포스팅에 누군가 다음과 같은 댓글을 달았습니다:
 "${replyText}"
 
-이 댓글에 대한 친절하고 센스 있는 반말 답글을 150자 이내로 작성해주세요.
-- 필수 규칙: 100% 반말, 가르치려 들지 않는 친구 같은 공감형 말투, 귀여운 이모티콘 사용 (예: ꒰ • ̫ - ꒱⊹˚. 등)
-- 절대 존댓말 쓰지 마세요.
+이 댓글에 대해 인스타그램/스레드 감성에 맞춰 150자 이내로 자연스럽고 친근한 답글 초안을 작성해주세요.
+
+[필수 규칙]
+- 100% 반말로 작성하세요. (예: ~어, ~야, ~지?, ~해!, ~고마워) 존댓말 절대 금지!
+- 잇프제(ISFJ) 메이커 특유의 공감 능력 만렙, 다정하고 친근한 친구 같은 말투를 유지하세요.
+- 데이트 코스 짜기 고민에 격하게 공감하거나 둘픽 앱 소식을 반갑게 공유하세요.
+- 사람 냄새 나는 귀여운 이모티콘(😊, 🥹, 💖, 🙋‍♀️ 등)을 적절히 섞어주세요.
+- 해시태그는 절대 사용하지 마세요.
 `;
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -495,14 +501,29 @@ ${topicInstruction}
       {replies.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {replies.map(reply => (
-            <div key={reply.id} style={{ padding: 16, border: '1px solid #E5E7EB', borderRadius: 8 }}>
-              <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>👤 댓글: "{reply.text}"</p>
+            <div key={reply.id} style={{ padding: 16, border: '1px solid #E5E7EB', borderRadius: 8, backgroundColor: '#FFF' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>
+                  👤 {reply.username ? `@${reply.username}` : '스레드 유저'}
+                </span>
+                <a
+                  href="https://www.threads.net"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: 12, color: '#4F46E5', textDecoration: 'none', fontWeight: 500 }}
+                >
+                  ❤️ 스레드 앱에서 하트 누르기 🔗
+                </a>
+              </div>
+              <p style={{ marginBottom: 12, fontSize: 15, color: '#374151', lineHeight: 1.5, backgroundColor: '#F9FAFB', padding: 12, borderRadius: 6 }}>
+                "{reply.text}"
+              </p>
               
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <button
                   onClick={() => generateReplyDraft(reply.id, reply.text)}
                   style={{
-                    padding: '8px 12px', backgroundColor: '#E0E7FF', color: '#4338CA',
+                    padding: '8px 14px', backgroundColor: '#E0E7FF', color: '#4338CA',
                     border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer'
                   }}
                 >
@@ -515,8 +536,9 @@ ${topicInstruction}
                   <textarea
                     value={replyDrafts[reply.id]}
                     onChange={(e) => setReplyDrafts(prev => ({ ...prev, [reply.id]: e.target.value }))}
+                    placeholder="생성된 답글이 여기에 나타납니다. 수정 가능합니다."
                     style={{
-                      width: '100%', height: 100, padding: 12, borderRadius: 6,
+                      width: '100%', height: 90, padding: 12, borderRadius: 6,
                       border: '1px solid #D1D5DB', fontSize: 14, lineHeight: 1.5,
                       boxSizing: 'border-box', marginBottom: 12, resize: 'vertical'
                     }}
@@ -528,7 +550,7 @@ ${topicInstruction}
                       border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer'
                     }}
                   >
-                    🚀 이 답글 발행하기
+                    🚀 이 답글 스레드에 발행하기
                   </button>
                 </>
               )}
