@@ -56,6 +56,11 @@ export default function AdminPanel() {
     return data.data.url;
   };
 
+  // Navigation & Pagination states
+  const [mainTab, setMainTab] = useState<'write' | 'comments'>('write');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   // Replies states
   const [recentThread, setRecentThread] = useState<Thread | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
@@ -407,218 +412,295 @@ ${topicInstruction}
     );
   }
 
+  const totalPages = Math.ceil(replies.length / itemsPerPage) || 1;
+  const currentReplies = replies.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div style={{ padding: '40px 20px', maxWidth: 600, margin: '0 auto', fontFamily: "'Pretendard', sans-serif" }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>🤖 Dulpick Auto Poster</h1>
-      <p style={{ color: '#666', marginBottom: 24 }}>AI가 스레드 포스팅 초안을 작성하고, 검수 후 원클릭으로 발행합니다.</p>
+      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>🤖 Dulpick Auto Poster</h1>
+      <p style={{ color: '#666', marginBottom: 20, fontSize: 14 }}>AI가 스레드 포스팅 초안을 작성하고, 댓글에 잇프제(ISFJ) 톤으로 답글을 생성합니다.</p>
       
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 15 }}>📝 오늘의 포스팅 카테고리 선택</p>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {[
-            { id: 'intro', label: '👋 자기소개' },
-            { id: 'empathy', label: '🫂 커플 공감' },
-            { id: 'service', label: '✨ 서비스 홍보' },
-            { id: 'dating', label: '👫 데이트 꿀팁' }
-          ].map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setCategory(cat.id)}
-              style={{
-                flex: 1, padding: '10px 0', borderRadius: 8, cursor: 'pointer',
-                fontWeight: 600, fontSize: 14,
-                backgroundColor: category === cat.id ? '#130537' : '#F2F3F5',
-                color: category === cat.id ? '#FFF' : '#666',
-                border: 'none', transition: 'all 0.2s'
-              }}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
+      {/* 📌 상단 메인 탭 메뉴 */}
+      <div style={{ display: 'flex', borderBottom: '2px solid #E5E7EB', marginBottom: 24 }}>
+        <button
+          onClick={() => setMainTab('write')}
+          style={{
+            flex: 1, padding: '12px 0', border: 'none', background: 'none', cursor: 'pointer',
+            fontSize: 16, fontWeight: 700,
+            color: mainTab === 'write' ? '#130537' : '#9CA3AF',
+            borderBottom: mainTab === 'write' ? '3px solid #130537' : 'none',
+            marginBottom: -2
+          }}
+        >
+          📝 스레드 글 작성
+        </button>
+        <button
+          onClick={() => {
+            setMainTab('comments');
+            if (replies.length === 0 && !isFetchingReplies) {
+              fetchRecentReplies();
+            }
+          }}
+          style={{
+            flex: 1, padding: '12px 0', border: 'none', background: 'none', cursor: 'pointer',
+            fontSize: 16, fontWeight: 700,
+            color: mainTab === 'comments' ? '#130537' : '#9CA3AF',
+            borderBottom: mainTab === 'comments' ? '3px solid #130537' : 'none',
+            marginBottom: -2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+          }}
+        >
+          💬 댓글 관리 {replies.length > 0 && <span style={{ backgroundColor: '#EEF2FF', color: '#4F46E5', fontSize: 12, padding: '2px 8px', borderRadius: 12 }}>{replies.length}</span>}
+        </button>
       </div>
 
-      {/* 🔧 임시 디버그 패널 - 확인 후 삭제 */}
-      <div style={{ marginBottom: 20, padding: 12, borderRadius: 8, backgroundColor: '#F9FAFB', border: '1px dashed #CCC', fontSize: 13 }}>
-        <p style={{ fontWeight: 700, marginBottom: 6 }}>🔧 환경변수 로드 확인 (임시)</p>
-        <p>GEMINI_KEY: {import.meta.env.VITE_GEMINI_API_KEY ? '✅ 있음' : '❌ 없음'}</p>
-        <p>THREADS_USER_ID: {import.meta.env.VITE_THREADS_USER_ID ? '✅ 있음' : '❌ 없음'}</p>
-        <p>THREADS_ACCESS_TOKEN: {import.meta.env.VITE_THREADS_ACCESS_TOKEN ? '✅ 있음' : '❌ 없음'}</p>
-      </div>
-
-      <button 
-        onClick={generateDraft} 
-        disabled={isGenerating}
-        style={{
-          width: '100%', padding: 16, backgroundColor: '#000', color: '#FFF',
-          borderRadius: 8, fontSize: 16, fontWeight: 600, border: 'none', cursor: 'pointer',
-          marginBottom: 20
-        }}
-      >
-        {isGenerating ? 'AI 초안 작성 중...' : '오늘의 스레드 초안 생성하기 ✨'}
-      </button>
-
-      <textarea 
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        placeholder="생성된 초안이 여기에 나타납니다. 직접 수정할 수 있습니다."
-        style={{
-          width: '100%', height: 250, padding: 16, borderRadius: 8,
-          border: '1px solid #CCC', fontSize: 15, lineHeight: 1.6,
-          boxSizing: 'border-box', marginBottom: 20, resize: 'vertical'
-        }}
-      />
-
-      {/* Image Upload UI */}
-      <div style={{ marginBottom: 20, padding: 16, backgroundColor: '#F9FAFB', borderRadius: 8, border: '1px solid #E5E7EB' }}>
-        <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>📷 이미지 첨부 (선택)</p>
-        <input 
-          type="file" 
-          accept="image/*"
-          onChange={handleImageChange}
-          style={{ width: '100%', fontSize: 14 }}
-        />
-        {imagePreview && (
-          <div style={{ marginTop: 12, position: 'relative', display: 'inline-block' }}>
-            <img src={imagePreview} alt="preview" style={{ maxHeight: 200, borderRadius: 8, border: '1px solid #E5E7EB' }} />
-            <button
-              onClick={() => {
-                setImageFile(null);
-                setImagePreview(null);
-              }}
-              style={{
-                position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: '#FFF',
-                border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        )}
-      </div>
-
-      <button 
-        onClick={publishToThreads} 
-        disabled={isPublishing || !draft}
-        style={{
-          width: '100%', padding: 16, backgroundColor: '#130537', color: '#FFF',
-          borderRadius: 8, fontSize: 16, fontWeight: 600, border: 'none', cursor: 'pointer',
-          opacity: (isPublishing || !draft) ? 0.5 : 1
-        }}
-      >
-        {isPublishing ? '발행 중...' : '스레드에 자동 발행하기 🚀'}
-      </button>
-
-      {message && (
-        <div style={{
-          marginTop: 20, padding: 16, borderRadius: 8,
-          backgroundColor: message.includes('에러') ? '#FEE2E2' : '#DCFCE7',
-          color: message.includes('에러') ? '#991B1B' : '#166534',
-          fontWeight: 600, textAlign: 'center'
-        }}>
-          {message}
-        </div>
-      )}
-
-      {/* --- Replies Section --- */}
-      <hr style={{ margin: '40px 0', border: 'none', borderTop: '1px solid #E5E7EB' }} />
-      
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>💬 스레드 댓글(답글) 관리</h2>
-      <p style={{ color: '#666', marginBottom: 20, fontSize: 14 }}>최근 작성한 스레드에 달린 댓글을 불러오고 AI 답글을 달 수 있습니다.</p>
-      
-      <button 
-        onClick={fetchRecentReplies} 
-        disabled={isFetchingReplies}
-        style={{
-          width: '100%', padding: 14, backgroundColor: '#F3F4F6', color: '#374151',
-          borderRadius: 8, fontSize: 15, fontWeight: 600, border: '1px solid #D1D5DB', cursor: 'pointer',
-          marginBottom: 16
-        }}
-      >
-        {isFetchingReplies ? '불러오는 중...' : '🔄 최근 포스팅 댓글 불러오기'}
-      </button>
-
-      {replyMessage && (
-        <div style={{
-          marginBottom: 16, padding: 12, borderRadius: 8,
-          backgroundColor: replyMessage.includes('에러') ? '#FEE2E2' : '#EFF6FF',
-          color: replyMessage.includes('에러') ? '#991B1B' : '#1E40AF',
-          fontSize: 14, fontWeight: 600, textAlign: 'center'
-        }}>
-          {replyMessage}
-        </div>
-      )}
-
-      {replies.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {replies.map(reply => (
-            <div key={reply.id} style={{ padding: 16, border: '1px solid #E5E7EB', borderRadius: 8, backgroundColor: '#FFF' }}>
-              {reply.threadText && (
-                <div style={{ fontSize: 12, color: '#4B5563', marginBottom: 8, padding: '6px 10px', backgroundColor: '#F3F4F6', borderRadius: 6 }}>
-                  📌 <strong>원글:</strong> "{reply.threadText.substring(0, 45)}{reply.threadText.length > 45 ? '...' : ''}"
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>
-                  👤 {reply.username ? `@${reply.username}` : '스레드 유저'}
-                  {reply.timestamp && (
-                    <span style={{ fontWeight: 400, fontSize: 12, color: '#9CA3AF', marginLeft: 8 }}>
-                      {new Date(reply.timestamp).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
-                </span>
-                <a
-                  href={reply.threadPermalink || "https://www.threads.net"}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ fontSize: 12, color: '#4F46E5', textDecoration: 'none', fontWeight: 600 }}
-                >
-                  ❤️ 스레드 앱에서 보기 (하트) 🔗
-                </a>
-              </div>
-              <p style={{ marginBottom: 12, fontSize: 15, color: '#374151', lineHeight: 1.5, backgroundColor: '#F9FAFB', padding: 12, borderRadius: 6 }}>
-                "{reply.text}"
-              </p>
-              
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      {/* ----------------- 탭 1: 스레드 글 작성 ----------------- */}
+      {mainTab === 'write' && (
+        <>
+          <div style={{ marginBottom: 20 }}>
+            <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 15 }}>📝 오늘의 포스팅 카테고리 선택</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { id: 'intro', label: '👋 자기소개' },
+                { id: 'empathy', label: '🫂 커플 공감' },
+                { id: 'service', label: '✨ 서비스 홍보' },
+                { id: 'dating', label: '👫 데이트 꿀팁' }
+              ].map(cat => (
                 <button
-                  onClick={() => generateReplyDraft(reply.id, reply.text, reply.threadText)}
+                  key={cat.id}
+                  onClick={() => setCategory(cat.id)}
                   style={{
-                    padding: '8px 14px', backgroundColor: '#E0E7FF', color: '#4338CA',
-                    border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer'
+                    flex: 1, padding: '10px 0', borderRadius: 8, cursor: 'pointer',
+                    fontWeight: 600, fontSize: 14,
+                    backgroundColor: category === cat.id ? '#130537' : '#F2F3F5',
+                    color: category === cat.id ? '#FFF' : '#666',
+                    border: 'none', transition: 'all 0.2s'
                   }}
                 >
-                  ✨ AI 답글 초안 생성
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 🔧 환경변수 로드 확인 패널 */}
+          <div style={{ marginBottom: 20, padding: 12, borderRadius: 8, backgroundColor: '#F9FAFB', border: '1px dashed #CCC', fontSize: 13 }}>
+            <p style={{ fontWeight: 700, marginBottom: 6 }}>🔧 환경변수 로드 확인</p>
+            <p>GEMINI_KEY: {import.meta.env.VITE_GEMINI_API_KEY ? '✅ 있음' : '❌ 없음'}</p>
+            <p>THREADS_USER_ID: {import.meta.env.VITE_THREADS_USER_ID ? '✅ 있음' : '❌ 없음'}</p>
+            <p>THREADS_ACCESS_TOKEN: {import.meta.env.VITE_THREADS_ACCESS_TOKEN ? '✅ 있음' : '❌ 없음'}</p>
+          </div>
+
+          <button 
+            onClick={generateDraft} 
+            disabled={isGenerating}
+            style={{
+              width: '100%', padding: 16, backgroundColor: '#000', color: '#FFF',
+              borderRadius: 8, fontSize: 16, fontWeight: 600, border: 'none', cursor: 'pointer',
+              marginBottom: 20
+            }}
+          >
+            {isGenerating ? 'AI 초안 작성 중...' : '오늘의 스레드 초안 생성하기 ✨'}
+          </button>
+
+          <textarea 
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="생성된 초안이 여기에 나타납니다. 직접 수정할 수 있습니다."
+            style={{
+              width: '100%', height: 250, padding: 16, borderRadius: 8,
+              border: '1px solid #CCC', fontSize: 15, lineHeight: 1.6,
+              boxSizing: 'border-box', marginBottom: 20, resize: 'vertical'
+            }}
+          />
+
+          {/* Image Upload UI */}
+          <div style={{ marginBottom: 20, padding: 16, backgroundColor: '#F9FAFB', borderRadius: 8, border: '1px solid #E5E7EB' }}>
+            <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>📷 이미지 첨부 (선택)</p>
+            <input 
+              type="file" 
+              accept="image/*"
+              onChange={handleImageChange}
+              style={{ width: '100%', fontSize: 14 }}
+            />
+            {imagePreview && (
+              <div style={{ marginTop: 12, position: 'relative', display: 'inline-block' }}>
+                <img src={imagePreview} alt="preview" style={{ maxHeight: 200, borderRadius: 8, border: '1px solid #E5E7EB' }} />
+                <button
+                  onClick={() => {
+                    setImageFile(null);
+                    setImagePreview(null);
+                  }}
+                  style={{
+                    position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: '#FFF',
+                    border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12
+                  }}
+                >
+                  ✕
                 </button>
               </div>
+            )}
+          </div>
 
-              {replyDrafts[reply.id] !== undefined && (
-                <>
-                  <textarea
-                    value={replyDrafts[reply.id]}
-                    onChange={(e) => setReplyDrafts(prev => ({ ...prev, [reply.id]: e.target.value }))}
-                    placeholder="생성된 답글이 여기에 나타납니다. 수정 가능합니다."
-                    style={{
-                      width: '100%', height: 90, padding: 12, borderRadius: 6,
-                      border: '1px solid #D1D5DB', fontSize: 14, lineHeight: 1.5,
-                      boxSizing: 'border-box', marginBottom: 12, resize: 'vertical'
-                    }}
-                  />
+          <button 
+            onClick={publishToThreads} 
+            disabled={isPublishing || !draft}
+            style={{
+              width: '100%', padding: 16, backgroundColor: '#130537', color: '#FFF',
+              borderRadius: 8, fontSize: 16, fontWeight: 600, border: 'none', cursor: 'pointer',
+              opacity: (isPublishing || !draft) ? 0.5 : 1
+            }}
+          >
+            {isPublishing ? '발행 중...' : '스레드에 자동 발행하기 🚀'}
+          </button>
+
+          {message && (
+            <div style={{
+              marginTop: 20, padding: 16, borderRadius: 8,
+              backgroundColor: message.includes('에러') ? '#FEE2E2' : '#DCFCE7',
+              color: message.includes('에러') ? '#991B1B' : '#166534',
+              fontWeight: 600, textAlign: 'center'
+            }}>
+              {message}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ----------------- 탭 2: 스레드 댓글 관리 ----------------- */}
+      {mainTab === 'comments' && (
+        <>
+          <button 
+            onClick={fetchRecentReplies} 
+            disabled={isFetchingReplies}
+            style={{
+              width: '100%', padding: 14, backgroundColor: '#F3F4F6', color: '#374151',
+              borderRadius: 8, fontSize: 15, fontWeight: 600, border: '1px solid #D1D5DB', cursor: 'pointer',
+              marginBottom: 16
+            }}
+          >
+            {isFetchingReplies ? '댓글 불러오는 중...' : '🔄 전체 댓글 새로고침'}
+          </button>
+
+          {replyMessage && (
+            <div style={{
+              marginBottom: 16, padding: 12, borderRadius: 8,
+              backgroundColor: replyMessage.includes('에러') ? '#FEE2E2' : '#EFF6FF',
+              color: replyMessage.includes('에러') ? '#991B1B' : '#1E40AF',
+              fontSize: 14, fontWeight: 600, textAlign: 'center'
+            }}>
+              {replyMessage}
+            </div>
+          )}
+
+          {currentReplies.length > 0 && (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {currentReplies.map(reply => (
+                  <div key={reply.id} style={{ padding: 16, border: '1px solid #E5E7EB', borderRadius: 8, backgroundColor: '#FFF' }}>
+                    {reply.threadText && (
+                      <div style={{ fontSize: 12, color: '#4B5563', marginBottom: 8, padding: '6px 10px', backgroundColor: '#F3F4F6', borderRadius: 6 }}>
+                        📌 <strong>원글:</strong> "{reply.threadText.substring(0, 45)}{reply.threadText.length > 45 ? '...' : ''}"
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>
+                        👤 {reply.username ? `@${reply.username}` : '스레드 유저'}
+                        {reply.timestamp && (
+                          <span style={{ fontWeight: 400, fontSize: 12, color: '#9CA3AF', marginLeft: 8 }}>
+                            {new Date(reply.timestamp).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </span>
+                      <a
+                        href={reply.threadPermalink || "https://www.threads.net"}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: 12, color: '#4F46E5', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        ❤️ 스레드 앱에서 보기 (하트) 🔗
+                      </a>
+                    </div>
+                    <p style={{ marginBottom: 12, fontSize: 15, color: '#374151', lineHeight: 1.5, backgroundColor: '#F9FAFB', padding: 12, borderRadius: 6 }}>
+                      "{reply.text}"
+                    </p>
+                    
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                      <button
+                        onClick={() => generateReplyDraft(reply.id, reply.text, reply.threadText)}
+                        style={{
+                          padding: '8px 14px', backgroundColor: '#E0E7FF', color: '#4338CA',
+                          border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer'
+                        }}
+                      >
+                        ✨ AI 답글 초안 생성
+                      </button>
+                    </div>
+
+                    {replyDrafts[reply.id] !== undefined && (
+                      <>
+                        <textarea
+                          value={replyDrafts[reply.id]}
+                          onChange={(e) => setReplyDrafts(prev => ({ ...prev, [reply.id]: e.target.value }))}
+                          placeholder="생성된 답글이 여기에 나타납니다. 수정 가능합니다."
+                          style={{
+                            width: '100%', height: 90, padding: 12, borderRadius: 6,
+                            border: '1px solid #D1D5DB', fontSize: 14, lineHeight: 1.5,
+                            boxSizing: 'border-box', marginBottom: 12, resize: 'vertical'
+                          }}
+                        />
+                        <button
+                          onClick={() => publishReply(reply.id)}
+                          style={{
+                            width: '100%', padding: 12, backgroundColor: '#130537', color: '#FFF',
+                            border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer'
+                          }}
+                        >
+                          🚀 이 답글 스레드에 발행하기
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* 📄 페이지네이션 컨트롤 */}
+              {totalPages > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 24 }}>
                   <button
-                    onClick={() => publishReply(reply.id)}
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
                     style={{
-                      width: '100%', padding: 12, backgroundColor: '#130537', color: '#FFF',
-                      border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer'
+                      padding: '8px 16px', borderRadius: 6, border: '1px solid #D1D5DB',
+                      backgroundColor: currentPage === 1 ? '#F3F4F6' : '#FFF',
+                      color: currentPage === 1 ? '#9CA3AF' : '#374151',
+                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 14
                     }}
                   >
-                    🚀 이 답글 스레드에 발행하기
+                    ◀ 이전
                   </button>
-                </>
+                  
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
+                    {currentPage} / {totalPages} 페이지 (총 {replies.length}개)
+                  </span>
+
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    style={{
+                      padding: '8px 16px', borderRadius: 6, border: '1px solid #D1D5DB',
+                      backgroundColor: currentPage === totalPages ? '#F3F4F6' : '#FFF',
+                      color: currentPage === totalPages ? '#9CA3AF' : '#374151',
+                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 14
+                    }}
+                  >
+                    다음 ▶
+                  </button>
+                </div>
               )}
-            </div>
-          ))}
-        </div>
+            </>
+          )}
+        </>
       )}
       
       <div style={{ marginTop: 40, textAlign: 'center' }}>
