@@ -263,27 +263,35 @@ ${topicInstruction}
     }
   };
 
-  const generateReplyDraft = async (replyId: string, replyText: string) => {
+  const generateReplyDraft = async (replyId: string, replyText: string, threadText?: string) => {
     try {
       setReplyMessage('답글 초안 생성 중...');
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (!apiKey) throw new Error("Gemini API Key missing");
 
       const prompt = `
-당신은 '둘픽(Dulpick)'이라는 커플 데이트 코스 앱 서비스를 직접 만든 1년 차 ISFJ(잇프제) 커플 1인 메이커입니다.
-당신이 스레드에 올린 포스팅에 누군가 다음과 같은 댓글을 달았습니다:
+당신은 스레드(Threads) 계정을 운영하는 1년 차 ISFJ(잇프제) 커플입니다.
+
+내가 올린 원글 내용:
+"${threadText || '연애 / 데이트 / MBTI 공감 관련 스레드 포스팅'}"
+
+내 포스팅에 상대방이 남긴 댓글 내용:
 "${replyText}"
 
-이 댓글에 대한 답글 초안을 작성해주세요.
+상대방의 댓글에 대해 티키타카가 잘 되는 자연스러운 답글 1~2문장을 작성해주세요.
 
-[필수 규칙]
-1. 분량: 무조건 1~2문장 이내로 아주 짧고 센스있게 작성하세요. 절대 길게 쓰지 마세요!!
+[절대 주의 사항 - 🚨 서비스 언급 금지]
+- '둘픽', 'Dulpick', '앱', '서비스', '다운로드', '만들었다' 등 서비스/앱 언급 및 홍보는 100% 절대 금지입니다!!
+- 뜬금없이 서비스 언급이나 딴소리를 하지 마시고, 오직 상대방 댓글 내용과 원글 맥락에 맞춰 공감하거나 위트 있게 티키타카 반응만 하세요.
+
+[필수 작성 규칙]
+1. 분량: 무조건 1~2문장 이내로 아주 짧게! (긴 글 절대 금지)
 2. 말투 및 톤앤매너:
-   - 기본적으로 친근한 반말(~어!, ~맞아 🥹, ~고마워)로 작성하세요.
-   - ⭐️ 단, 상대방 댓글("${replyText}")에 존댓말(~요, ~습니다, ~해요, ~하세요 등)이 사용되었다면 예의 바르게 존댓말(~요!, ~감사해요😊)로 맞춰서 답하세요.
-3. 성격: ISFJ(잇프제) 특유의 다정다감함, 공감 능력 만렙, 꼼꼼함이 느껴지게 작성하세요.
-4. 귀여운 이모티콘(🥹, 😊, 💖, 🙋‍♀️ 등)을 1~2개 섞어주세요.
-5. 해시태그는 절대 사용하지 마세요.
+   - 기본적으로 친근하고 다정한 반말(~어!, ~맞아 🥹, ~고마워!, ~그치!)로 작성하세요.
+   - ⭐️ 단, 상대방 댓글("${replyText}")이 존댓말(~요, ~습니다, ~해요, ~하세요 등)로 작성되었다면 예의 바르게 존댓말(~요!, ~감사해요😊)로 톤을 일치시키세요.
+3. 성격: 잇프제(ISFJ) 특유의 따뜻함, 공감 능력 만렙, 꼼꼼한 친구 같은 다정함을 유지하세요.
+4. 이모티콘(🥹, 😊, 💖, 🤣 등)을 1~2개 섞어주세요.
+5. 해시태그나 서비스 언급은 절대 금지합니다.
 `;
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -575,7 +583,7 @@ ${topicInstruction}
               
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <button
-                  onClick={() => generateReplyDraft(reply.id, reply.text)}
+                  onClick={() => generateReplyDraft(reply.id, reply.text, reply.threadText)}
                   style={{
                     padding: '8px 14px', backgroundColor: '#E0E7FF', color: '#4338CA',
                     border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer'
