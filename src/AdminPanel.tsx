@@ -196,7 +196,7 @@ ${topicInstruction}
       if (!userId || !accessToken) throw new Error("Threads API credentials missing");
 
       // 1. Fetch user's recent threads
-      const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?access_token=${accessToken}`);
+      const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?fields=id,text,timestamp&access_token=${accessToken}`);
       const threadsData = await threadsRes.json();
       if (!threadsRes.ok) throw new Error(JSON.stringify(threadsData.error));
 
@@ -486,15 +486,26 @@ ${topicInstruction}
         style={{
           width: '100%', padding: 14, backgroundColor: '#F3F4F6', color: '#374151',
           borderRadius: 8, fontSize: 15, fontWeight: 600, border: '1px solid #D1D5DB', cursor: 'pointer',
-          marginBottom: 20
+          marginBottom: 16
         }}
       >
         {isFetchingReplies ? '불러오는 중...' : '🔄 최근 포스팅 댓글 불러오기'}
       </button>
 
+      {replyMessage && (
+        <div style={{
+          marginBottom: 16, padding: 12, borderRadius: 8,
+          backgroundColor: replyMessage.includes('에러') ? '#FEE2E2' : '#EFF6FF',
+          color: replyMessage.includes('에러') ? '#991B1B' : '#1E40AF',
+          fontSize: 14, fontWeight: 600, textAlign: 'center'
+        }}>
+          {replyMessage}
+        </div>
+      )}
+
       {recentThread && (
         <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#F9FAFB', borderRadius: 8, fontSize: 13, color: '#4B5563' }}>
-          <strong>최근 포스팅:</strong> {recentThread.text.substring(0, 50)}...
+          <strong>최근 포스팅:</strong> {recentThread.text ? (recentThread.text.length > 50 ? recentThread.text.substring(0, 50) + '...' : recentThread.text) : '(이미지/미디어 포스팅)'}
         </div>
       )}
 
@@ -556,17 +567,6 @@ ${topicInstruction}
               )}
             </div>
           ))}
-        </div>
-      )}
-
-      {replyMessage && (
-        <div style={{
-          marginTop: 16, padding: 12, borderRadius: 8,
-          backgroundColor: replyMessage.includes('에러') ? '#FEE2E2' : '#EFF6FF',
-          color: replyMessage.includes('에러') ? '#991B1B' : '#1E40AF',
-          fontSize: 14, fontWeight: 600, textAlign: 'center'
-        }}>
-          {replyMessage}
         </div>
       )}
       
