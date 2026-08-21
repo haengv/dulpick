@@ -195,7 +195,31 @@ ${topicInstruction}
       const accessToken = import.meta.env.VITE_THREADS_ACCESS_TOKEN;
       if (!userId || !accessToken) throw new Error("Threads API credentials missing");
 
-      // 1. Fetch user's recent threads
+      // Try serverless endpoint first (bypasses browser CORS & adblockers)
+      let proxyData: any = null;
+      try {
+        const apiRes = await fetch(`/api/get_replies?userId=${userId}&accessToken=${accessToken}`);
+        if (apiRes.ok) {
+          proxyData = await apiRes.json();
+        }
+      } catch (e) {
+        console.warn("API proxy fetch failed, falling back to direct fetch", e);
+      }
+
+      if (proxyData && proxyData.success) {
+        setRecentThread(proxyData.thread);
+        setReplies(proxyData.replies || []);
+        if (!proxyData.thread) {
+          setReplyMessage('작성된 스레드 포스팅이 없습니다.');
+        } else if (!proxyData.replies || proxyData.replies.length === 0) {
+          setReplyMessage('최근 포스팅에 아직 댓글이 없습니다.');
+        } else {
+          setReplyMessage('댓글을 성공적으로 불러왔습니다.');
+        }
+        return;
+      }
+
+      // Direct Client Fallback
       const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?fields=id,text,timestamp&access_token=${accessToken}`);
       const threadsData = await threadsRes.json();
       if (!threadsRes.ok) throw new Error(JSON.stringify(threadsData.error));
