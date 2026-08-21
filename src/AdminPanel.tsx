@@ -68,7 +68,7 @@ export default function AdminPanel() {
   const [isFetchingReplies, setIsFetchingReplies] = useState(false);
   const [replyMessage, setReplyMessage] = useState('');
 
-  const generateDraft = async () => {
+  const generateDraft = async (fromComment?: { text: string; threadText?: string }) => {
     setIsGenerating(true);
     setMessage('');
     
@@ -77,7 +77,13 @@ export default function AdminPanel() {
       if (!apiKey) throw new Error("Gemini API Key missing");
 
       let topicInstruction = '';
-      if (category === 'intro') {
+      if (fromComment) {
+        topicInstruction = `[이전 포스팅의 반응 대박 댓글을 기반으로 한 2차 연계 포스팅 기획]
+- 내 원글: "${fromComment.threadText || ''}"
+- 유저가 남긴 반응 대박 댓글: "${fromComment.text}"
+
+이 유저 댓글에서 파생된 연애/데이트 고민, MBTI 성향 차이, 서운함 또는 억울한 썰을 주제로 삼아, 다른 스레드 유저들이 또다시 폭발적으로 참견하고 댓글을 달 수밖에 없는 새로운 스레드 포스팅 1개를 작성해주세요!`;
+      } else if (category === 'intro') {
         topicInstruction = '주제: 메이커 본인 소개. "안녕 나는 20대고 1년 차 연애 중인 J형 계획형 커플이야. 매번 나만 데이트 코스 짜느라 고민이 많았어" 같은 성향과 고민을 솔직하게 나누며 친근하게 다가가는 자기소개 내용';
       } else if (category === 'empathy') {
         topicInstruction = '주제: 매번 한 명(주로 J)만 데이트 코스를 짜서 지치는 상황이나, 인스타 릴스에 핫플 저장만 해두고 막상 데이트 땐 기억 못하는 커플들의 뼈를 때리거나 찐공감을 유도하는 내용';
@@ -88,17 +94,15 @@ export default function AdminPanel() {
       }
 
       const prompt = `
-당신은 '둘픽(Dulpick)' 이라는 커플 데이트 코스 앱 서비스를 직접 만든 1년 차 잇프제(ISFJ) 커플 1인 메이커입니다.
-둘픽은 "인스타에서 본 장소들을 공유만 하면 커플 공용 지도에 자동 저장되고, 함께 데이트 코스를 짤 수 있는" 서비스입니다.
-
-매일 스레드(Threads)에 올릴 짧고 매력적인 포스팅 초안을 작성해주세요.
+당신은 1년 차 잇프제(ISFJ) 커플입니다.
+스레드(Threads)에 올릴 짧고 매력적인 포스팅 초안을 작성해주세요.
 ${topicInstruction}
 
 [필수 규칙]
 - ISFJ(잇프제) 성향 특유의 세심함, 다정함, 그리고 혼자 동선 챙기다 속으로 끙끙 앓는 솔직함이 묻어나오게 작성하세요.
 - 글자 수는 공백 포함 최대 200자를 절대 넘지 않게 짧게 작성하세요.
 - 기본 반말 형태(~어, ~야, ~지?, ~해봤어)로 작성하세요.
-- 사람 냄새나는 이모티콘을 적절히 섞어주세요.
+- 이모티콘을 적절히 섞어주세요.
 - 글 마무리는 자연스럽게 질문을 던지며 댓글 참여를 유도하세요.
 - 해시태그는 넣지 마세요.
 `;
@@ -116,7 +120,7 @@ ${topicInstruction}
 
       const generatedText = data.candidates[0].content.parts[0].text;
       setDraft(generatedText);
-      setMessage('초안 생성 완료!');
+      setMessage(fromComment ? '💡 선택한 댓글을 기반으로 새 포스팅 초안이 작성되었습니다!' : '초안 생성 완료!');
     } catch (err: any) {
       setMessage(`에러: ${err.message}`);
     } finally {
@@ -625,7 +629,7 @@ ${topicInstruction}
                       "{reply.text}"
                     </p>
                     
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                       <button
                         onClick={() => generateReplyDraft(reply.id, reply.text, reply.threadText)}
                         style={{
@@ -634,6 +638,18 @@ ${topicInstruction}
                         }}
                       >
                         ✨ AI 답글 초안 생성
+                      </button>
+                      <button
+                        onClick={() => {
+                          setMainTab('write');
+                          generateDraft({ text: reply.text, threadText: reply.threadText });
+                        }}
+                        style={{
+                          padding: '8px 14px', backgroundColor: '#FEF3C7', color: '#92400E',
+                          border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer'
+                        }}
+                      >
+                        💡 이 댓글 주제로 새 글 작성
                       </button>
                     </div>
 
