@@ -5,6 +5,9 @@ interface Reply {
   text: string;
   timestamp?: string;
   username?: string;
+  threadId?: string;
+  threadText?: string;
+  threadPermalink?: string;
 }
 
 interface Thread {
@@ -202,20 +205,17 @@ ${topicInstruction}
       }
 
       if (proxyData && proxyData.success) {
-        setRecentThread(proxyData.thread);
         setReplies(proxyData.replies || []);
-        if (!proxyData.thread) {
-          setReplyMessage('작성된 스레드 포스팅이 없습니다.');
-        } else if (!proxyData.replies || proxyData.replies.length === 0) {
-          setReplyMessage('최근 포스팅에 아직 댓글이 없습니다.');
+        if (!proxyData.replies || proxyData.replies.length === 0) {
+          setReplyMessage('최근 게시글에 작성된 댓글이 없습니다.');
         } else {
-          setReplyMessage('댓글을 성공적으로 불러왔습니다.');
+          setReplyMessage(`총 ${proxyData.replies.length}개의 댓글을 최신순으로 불러왔습니다 ✨`);
         }
         return;
       }
 
-      // Direct Client Fallback
-      const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?fields=id,text,timestamp&access_token=${accessToken}`);
+      // Direct Client Fallback (fetches top 5 threads and merges replies)
+      const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?fields=id,text,timestamp,permalink&limit=5&access_token=${accessToken}`);
       const threadsData = await threadsRes.json();
       if (!threadsRes.ok) throw new Error(JSON.stringify(threadsData.error));
 
@@ -224,19 +224,37 @@ ${topicInstruction}
         return;
       }
       
-      const latestThread = threadsData.data[0];
-      setRecentThread(latestThread);
+      const allReplies: Reply[] = [];
+      await Promise.all(
+        threadsData.data.map(async (thread: any) => {
+          try {
+            const repliesRes = await fetch(`https://graph.threads.net/v1.0/${thread.id}/replies?fields=id,text,username,timestamp&access_token=${accessToken}`);
+            const repliesData = await repliesRes.json();
+            if (repliesRes.ok && repliesData.data) {
+              repliesData.data.forEach((reply: any) => {
+                allReplies.push({
+                  ...reply,
+                  threadId: thread.id,
+                  threadText: thread.text,
+                  threadPermalink: thread.permalink
+                });
+              });
+            }
+          } catch (e) {}
+        })
+      );
 
-      // 2. Fetch replies for the latest thread
-      const repliesRes = await fetch(`https://graph.threads.net/v1.0/${latestThread.id}/replies?fields=id,text,username,timestamp&access_token=${accessToken}`);
-      const repliesData = await repliesRes.json();
-      if (!repliesRes.ok) throw new Error(JSON.stringify(repliesData.error));
+      allReplies.sort((a, b) => {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return timeB - timeA;
+      });
 
-      setReplies(repliesData.data || []);
-      if (!repliesData.data || repliesData.data.length === 0) {
-        setReplyMessage('최근 포스팅에 아직 댓글이 없습니다.');
+      setReplies(allReplies);
+      if (allReplies.length === 0) {
+        setReplyMessage('최근 게시글에 작성된 댓글이 없습니다.');
       } else {
-        setReplyMessage('댓글을 성공적으로 불러왔습니다.');
+        setReplyMessage(`총 ${allReplies.length}개의 댓글을 최신순으로 불러왔습니다 ✨`);
       }
     } catch (err: any) {
       setReplyMessage(`댓글 불러오기 에러: ${err.message}`);
@@ -524,27 +542,31 @@ ${topicInstruction}
         </div>
       )}
 
-      {recentThread && (
-        <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#F9FAFB', borderRadius: 8, fontSize: 13, color: '#4B5563' }}>
-          <strong>최근 포스팅:</strong> {recentThread.text ? (recentThread.text.length > 50 ? recentThread.text.substring(0, 50) + '...' : recentThread.text) : '(이미지/미디어 포스팅)'}
-        </div>
-      )}
-
       {replies.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {replies.map(reply => (
             <div key={reply.id} style={{ padding: 16, border: '1px solid #E5E7EB', borderRadius: 8, backgroundColor: '#FFF' }}>
+              {reply.threadText && (
+                <div style={{ fontSize: 12, color: '#4B5563', marginBottom: 8, padding: '6px 10px', backgroundColor: '#F3F4F6', borderRadius: 6 }}>
+                  📌 <strong>원글:</strong> "{reply.threadText.substring(0, 45)}{reply.threadText.length > 45 ? '...' : ''}"
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>
                   👤 {reply.username ? `@${reply.username}` : '스레드 유저'}
+                  {reply.timestamp && (
+                    <span style={{ fontWeight: 400, fontSize: 12, color: '#9CA3AF', marginLeft: 8 }}>
+                      {new Date(reply.timestamp).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
                 </span>
                 <a
-                  href="https://www.threads.net"
+                  href={reply.threadPermalink || "https://www.threads.net"}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ fontSize: 12, color: '#4F46E5', textDecoration: 'none', fontWeight: 500 }}
+                  style={{ fontSize: 12, color: '#4F46E5', textDecoration: 'none', fontWeight: 600 }}
                 >
-                  ❤️ 스레드 앱에서 하트 누르기 🔗
+                  ❤️ 스레드 앱에서 보기 (하트) 🔗
                 </a>
               </div>
               <p style={{ marginBottom: 12, fontSize: 15, color: '#374151', lineHeight: 1.5, backgroundColor: '#F9FAFB', padding: 12, borderRadius: 6 }}>

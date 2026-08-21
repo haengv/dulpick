@@ -18,8 +18,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Threads credentials missing" });
     }
 
-    // 1. Fetch user's recent threads
-    const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?fields=id,text,timestamp&access_token=${accessToken}`);
+    // 1. Fetch user's recent threads (up to 10)
+    const threadsRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?fields=id,text,timestamp,permalink&limit=10&access_token=${accessToken}`);
     const threadsData = await threadsRes.json();
 
     if (!threadsRes.ok) {
@@ -27,23 +27,45 @@ export default async function handler(req, res) {
     }
 
     if (!threadsData.data || threadsData.data.length === 0) {
-      return res.status(200).json({ success: true, thread: null, replies: [] });
+      return res.status(200).json({ success: true, threads: [], replies: [] });
     }
 
-    const latestThread = threadsData.data[0];
+    const threads = threadsData.data;
+    const allReplies = [];
 
-    // 2. Fetch replies for the latest thread
-    const repliesRes = await fetch(`https://graph.threads.net/v1.0/${latestThread.id}/replies?fields=id,text,username,timestamp&access_token=${accessToken}`);
-    const repliesData = await repliesRes.json();
+    // 2. Fetch replies for each recent thread concurrently
+    await Promise.all(
+      threads.map(async (thread) => {
+        try {
+          const repliesRes = await fetch(`https://graph.threads.net/v1.0/${thread.id}/replies?fields=id,text,username,timestamp&access_token=${accessToken}`);
+          const repliesData = await repliesRes.json();
+          if (repliesRes.ok && repliesData.data) {
+            repliesData.data.forEach(reply => {
+              allReplies.push({
+                ...reply,
+                threadId: thread.id,
+                threadText: thread.text,
+                threadPermalink: thread.permalink
+              });
+            });
+          }
+        } catch (e) {
+          // ignore single thread fetch error
+        }
+      })
+    );
 
-    if (!repliesRes.ok) {
-      return res.status(repliesRes.status).json({ error: repliesData.error || "Failed to fetch replies" });
-    }
+    // 3. Sort all replies by timestamp (newest first)
+    allReplies.sort((a, b) => {
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return timeB - timeA;
+    });
 
     return res.status(200).json({
       success: true,
-      thread: latestThread,
-      replies: repliesData.data || []
+      threadsCount: threads.length,
+      replies: allReplies
     });
   } catch (error) {
     return res.status(500).json({ error: error.message || "Internal server error" });
