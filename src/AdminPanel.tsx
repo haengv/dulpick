@@ -18,9 +18,18 @@ interface Thread {
 export default function AdminPanel() {
   // Pre-fill draft from URL query param (used when clicking the Discord deep-link)
   const urlParams = new URLSearchParams(window.location.search);
-  const draftFromUrl = urlParams.get('draft') || '';
+  const rawDraft = urlParams.get('draft') || '';
+  let initialDraft = rawDraft;
+  try {
+    const parsed = JSON.parse(rawDraft);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      initialDraft = parsed[0]?.text || rawDraft;
+    }
+  } catch {
+    // plain text
+  }
 
-  const [draft, setDraft] = useState(draftFromUrl);
+  const [draft, setDraft] = useState(initialDraft);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [message, setMessage] = useState('');
@@ -78,7 +87,15 @@ export default function AdminPanel() {
 
       let prompt = '';
 
-      if (fromComment) {
+      const isFromComment = Boolean(
+        fromComment &&
+        typeof fromComment === 'object' &&
+        'text' in fromComment &&
+        typeof fromComment.text === 'string' &&
+        fromComment.text.trim().length > 0
+      );
+
+      if (isFromComment && fromComment) {
         prompt = `
 당신은 20대 커플입니다. 이전 스레드 포스팅의 대박 댓글을 바탕으로 폭발적인 참견을 유도하는 2차 연계 스레드(Threads) 글 초안을 작성해주세요.
 - 내 원글: "${fromComment.threadText || ''}"
@@ -505,7 +522,7 @@ export default function AdminPanel() {
           </div>
 
           <button 
-            onClick={generateDraft} 
+            onClick={() => generateDraft()} 
             disabled={isGenerating}
             style={{
               width: '100%', padding: 16, backgroundColor: '#000', color: '#FFF',
