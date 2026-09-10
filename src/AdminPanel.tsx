@@ -35,20 +35,42 @@ export default function AdminPanel() {
   const [message, setMessage] = useState('');
   const [category, setCategory] = useState('empathy');
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [images, setImages] = useState<{ id: string; file: File; preview: string }[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+    fileList.forEach((file) => {
       const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.onloadend = () => {
+        setImages((prev) => {
+          if (prev.length >= 10) {
+            alert('스레드 캐러셀은 이미지를 최대 10장까지 첨부할 수 있습니다.');
+            return prev;
+          }
+          return [
+            ...prev,
+            {
+              id: `${Date.now()}-${Math.random()}`,
+              file,
+              preview: reader.result as string
+            }
+          ];
+        });
+      };
       reader.readAsDataURL(file);
-    } else {
-      setImageFile(null);
-      setImagePreview(null);
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
+  };
+
+  const removeImage = (id: string) => {
+    setImages((prev) => prev.filter((img) => img.id !== id));
   };
 
   const uploadImageToImgbb = async (file: File): Promise<string> => {
@@ -221,36 +243,91 @@ export default function AdminPanel() {
         throw new Error("Threads API credentials missing in Vercel env");
       }
 
-      let imageUrl = '';
-      if (imageFile) {
-        setMessage('이미지를 업로드 중입니다... (1/2)');
-        imageUrl = await uploadImageToImgbb(imageFile);
-        setMessage('스레드에 발행 중입니다... (2/2)');
+      let creationId = '';
+
+      if (images.length === 0) {
+        // Text-only post
+        setMessage('스레드에 발행 중입니다...');
+        const createParams = new URLSearchParams({
+          media_type: 'TEXT',
+          text: draft,
+          access_token: accessToken
+        });
+        const createRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?${createParams.toString()}`, {
+          method: 'POST',
+        });
+        const createData = await createRes.json();
+        if (!createRes.ok) throw new Error(JSON.stringify(createData.error) || "Failed to create container");
+        creationId = createData.id;
+
+      } else if (images.length === 1) {
+        // Single Image post
+        setMessage('이미지를 업로드 중입니다... (1/1)');
+        const imageUrl = await uploadImageToImgbb(images[0].file);
+        
+        setMessage('스레드 컨테이너 생성 중...');
+        const createParams = new URLSearchParams({
+          media_type: 'IMAGE',
+          image_url: imageUrl,
+          text: draft,
+          access_token: accessToken
+        });
+        const createRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?${createParams.toString()}`, {
+          method: 'POST',
+        });
+        const createData = await createRes.json();
+        if (!createRes.ok) throw new Error(JSON.stringify(createData.error) || "Failed to create container");
+        creationId = createData.id;
+
+      } else {
+        // Multiple Images: Carousel post (2~10 images)
+        const imageUrls: string[] = [];
+        for (let i = 0; i < images.length; i++) {
+          setMessage(`이미지 업로드 중... (${i + 1}/${images.length})`);
+          const url = await uploadImageToImgbb(images[i].file);
+          imageUrls.push(url);
+        }
+
+        // Step 1: Create individual child item containers
+        const childContainerIds: string[] = [];
+        for (let i = 0; i < imageUrls.length; i++) {
+          setMessage(`캐러셀 항목 등록 중... (${i + 1}/${imageUrls.length})`);
+          const childParams = new URLSearchParams({
+            media_type: 'IMAGE',
+            image_url: imageUrls[i],
+            is_carousel_item: 'true',
+            access_token: accessToken
+          });
+          const childRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?${childParams.toString()}`, {
+            method: 'POST',
+          });
+          const childData = await childRes.json();
+          if (!childRes.ok) throw new Error(JSON.stringify(childData.error) || `캐러셀 ${i + 1}번째 항목 생성 실패`);
+          childContainerIds.push(childData.id);
+        }
+
+        // Step 2: Create parent carousel container
+        setMessage('스레드 캐러셀(슬라이드) 생성 중...');
+        const carouselParams = new URLSearchParams({
+          media_type: 'CAROUSEL',
+          children: childContainerIds.join(','),
+          text: draft,
+          access_token: accessToken
+        });
+        const carouselRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?${carouselParams.toString()}`, {
+          method: 'POST',
+        });
+        const carouselData = await carouselRes.json();
+        if (!carouselRes.ok) throw new Error(JSON.stringify(carouselData.error) || "캐러셀 컨테이너 생성 실패");
+        creationId = carouselData.id;
       }
-
-      // Step 1: Create media container
-      const createParams: Record<string, string> = {
-        media_type: imageUrl ? 'IMAGE' : 'TEXT',
-        text: draft,
-        access_token: accessToken
-      };
-      if (imageUrl) {
-        createParams.image_url = imageUrl;
-      }
-      const createQuery = new URLSearchParams(createParams);
-
-      const createRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads?${createQuery.toString()}`, {
-        method: 'POST',
-      });
-      const createData = await createRes.json();
-      if (!createRes.ok) throw new Error(JSON.stringify(createData.error) || "Failed to create container");
-
-      const creationId = createData.id;
 
       // Wait a moment for Meta to process the container
-      await new Promise(res => setTimeout(res, 3000));
+      setMessage('스레드 서버 처리 대기 중... (약 3초)');
+      await new Promise(res => setTimeout(res, 3500));
 
-      // Step 2: Publish container
+      // Step: Publish container
+      setMessage('스레드에 최종 발행 중...');
       const publishParams = new URLSearchParams({
         creation_id: creationId,
         access_token: accessToken
@@ -263,6 +340,7 @@ export default function AdminPanel() {
 
       setMessage('🎉 스레드 자동 발행 성공!');
       setDraft(''); // Clear draft after successful publish
+      setImages([]); // Clear images after successful publish
     } catch (err: any) {
       setMessage(`에러: ${err.message}`);
     } finally {
@@ -544,31 +622,89 @@ export default function AdminPanel() {
             }}
           />
 
-          {/* Image Upload UI */}
+          {/* Image Upload UI (Multi-image support up to 10 images) */}
           <div style={{ marginBottom: 20, padding: 16, backgroundColor: '#F9FAFB', borderRadius: 8, border: '1px solid #E5E7EB' }}>
-            <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>📷 이미지 첨부 (선택)</p>
-            <input 
-              type="file" 
-              accept="image/*"
-              onChange={handleImageChange}
-              style={{ width: '100%', fontSize: 14 }}
-            />
-            {imagePreview && (
-              <div style={{ marginTop: 12, position: 'relative', display: 'inline-block' }}>
-                <img src={imagePreview} alt="preview" style={{ maxHeight: 200, borderRadius: 8, border: '1px solid #E5E7EB' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <p style={{ fontWeight: 600, fontSize: 14, margin: 0 }}>
+                📷 이미지 첨부 ({images.length}/10개)
+                {images.length > 1 && <span style={{ marginLeft: 6, color: '#4F46E5', fontSize: 12, fontWeight: 500 }}>• 스레드 캐러셀(슬라이드)로 자동 발행</span>}
+              </p>
+              {images.length > 0 && (
                 <button
-                  onClick={() => {
-                    setImageFile(null);
-                    setImagePreview(null);
-                  }}
+                  type="button"
+                  onClick={() => setImages([])}
                   style={{
-                    position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: '#FFF',
-                    border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12
+                    background: 'none', border: 'none', color: '#EF4444', fontSize: 12,
+                    fontWeight: 600, cursor: 'pointer', padding: 0
                   }}
                 >
-                  ✕
+                  전체 삭제
                 </button>
+              )}
+            </div>
+
+            <input 
+              ref={fileInputRef}
+              type="file" 
+              accept="image/*"
+              multiple
+              onChange={handleImageChange}
+              disabled={images.length >= 10}
+              style={{ width: '100%', fontSize: 14 }}
+            />
+            {images.length >= 10 && (
+              <p style={{ color: '#EF4444', fontSize: 12, marginTop: 6, marginBottom: 0 }}>
+                최대 첨부 가능한 개수(10장)에 도달했습니다.
+              </p>
+            )}
+
+            {images.length > 0 && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+                gap: 10,
+                marginTop: 12
+              }}>
+                {images.map((img, index) => (
+                  <div 
+                    key={img.id}
+                    style={{
+                      position: 'relative',
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      aspectRatio: '1 / 1',
+                      border: '1px solid #E5E7EB',
+                      backgroundColor: '#F3F4F6'
+                    }}
+                  >
+                    <img 
+                      src={img.preview} 
+                      alt={`upload-${index + 1}`} 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    />
+                    <div style={{
+                      position: 'absolute', top: 4, left: 4,
+                      backgroundColor: 'rgba(19, 5, 55, 0.75)', color: '#FFF',
+                      fontSize: 11, fontWeight: 700, borderRadius: 4,
+                      padding: '1px 5px', lineHeight: '14px'
+                    }}>
+                      {index + 1}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeImage(img.id)}
+                      style={{
+                        position: 'absolute', top: 4, right: 4,
+                        background: 'rgba(0, 0, 0, 0.6)', color: '#FFF',
+                        border: 'none', borderRadius: '50%', width: 20, height: 20,
+                        cursor: 'pointer', display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', fontSize: 11
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
